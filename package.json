@@ -1,0 +1,16 @@
+{
+  "name": "role",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Eric Ethington",
+  "license": "ISC",
+  "devDependencies": {
+    "body-parser": "^1.4.3",
+    "express": "^4.5.1",
+    "mongoose": "^3.8.12"
+  }
+}
