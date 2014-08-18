@@ -128,6 +128,12 @@ var siftMessages = function(data) {
 						newMessage.save(function(err){
 							if(err){console.log(err)};
 							console.log("message saved");
+							Twilio.sms.messages.create({
+								body: attendee.fullName + ", your attendance for " + newMessage.date.toDateString() + " has been recorded.",
+								to: message.from,
+								from: twilioPhoneNumber
+							});
+							
 						});
 						attendee.messages.push(newMessage);
 						attendee.save(function(){

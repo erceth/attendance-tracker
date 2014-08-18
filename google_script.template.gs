@@ -1,6 +1,6 @@
 function main() {
   var apiURL = "yourAPI.com/api";
-  var datesOfWeekToTrack = [5]; //Sun = 0, Mon = 1, Tues = 2...
+  var datesOfWeekToTrack = [1,5]; //Sun = 0, Mon = 1, Tues = 2...
   
   var today = new Date();
   
@@ -27,20 +27,22 @@ function main() {
     for(var i = 0; i < data.attendees.length; i++) {
       var row = [];
       row.push(data.attendees[i].fullName);
-
-      for(var j = 0; j < data.attendees[i].messages.length; j++) {
-        var messageDate = new Date(data.attendees[i].messages[j].date);
-        if (messageDate) {
-          for(var k = 0; k < datesToAttend.length; k++) {
-            if (messageDate.getDate() === datesToAttend[k].getDate()) {
-              row.push("x"); //here
-            } else {
-              row.push("");  //not here
-            }
-          }
-          allRows.push(row);
+      
+      for (var j = 0; j < datesToAttend.length; j++) {
+        var found = false;
+        for (var k = 0; k < data.attendees[i].messages.length; k++) {
+          var messageDate = new Date(data.attendees[i].messages[k].date);
+          if (messageDate && ( messageDate.getDate() === datesToAttend[j].getDate() )) {
+            row.push("x"); //here
+            found = true;
+            break;
+          } 
+        }
+        if(!found) {
+          row.push(""); //not here
         }
       }
+      allRows.push(row);
     }
     
     allRows.sort(
@@ -89,4 +91,3 @@ function numberToLetter(n) {
     }
     return s.toUpperCase();
 }
-
