@@ -35,3 +35,6 @@ bower_components/
 	
 # concatenated javascript and css
 app/compiled/
+
+#hide sensitive data
+config.js

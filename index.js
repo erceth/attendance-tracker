@@ -6,14 +6,26 @@ var mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost/ericet');
 
 var Attendee = require('./app/models/attendee');
+var Message = require('./app/models/message');
+var Config = require('./config');
+var Twilio = require('twilio')(Config.twilioAccountSid, Config.twilioAuthToken);
 
-//app.use(bodyParser());
+var twilioPhoneNumber = Config.twillioPhoneNumber;
+var wordOfTheDay = "mormon";  //default word of the day
+var fetchFromTwilio = true;
+
+var retrieveMessagesSince = function() {
+	var date = new Date();
+	//return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate(); //optimiziation
+	return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + "1";
+};
+
 app.use(bodyParser.urlencoded({
 	extended: true
 }));
 app.use(bodyParser.json());
 
-var port = process.env.PORT || 9000; 
+var port = process.env.PORT || 80; 
 
 var router = express.Router();
 
@@ -24,9 +36,136 @@ router.use(function(req, res, next) {
 	next(); // make sure we go to the next routes and don't stop here
 });
 
-router.get('/', function(req, res) {
-	res.json({ message: 'hooray! welcome to our api!' });	
+router.route('/setword/:newword/:password').get(function(req,res){
+	var newWord = req.params.newword;
+	var password = req.params.password;
+	
+	if (password === Config.wordOfDayPassword) {
+		wordOfTheDay = newWord;
+		res.json({message: "word of the day updated to " + wordOfTheDay});
+	}
 });
+
+//triggers a call to Twillio
+router.route('/text')
+	/*
+	text recieved
+	*/
+	.get(function(req, res) {
+		if (fetchFromTwilio) { //only first call to this api triggers twillio fetch.
+			fetchFromTwilio = false;
+			setTimeout(function() { //wait 3 secs before fetching.  Allows messages to accumulate into batches.
+				getTwilioMessages();
+				console.log("fetching from Twillio!");
+				fetchFromTwilio = true; 
+				res.json({message: ''});
+			}, 3000);
+		}
+	});
+	
+var getTwilioMessages = function() {
+	Twilio.messages.list({
+		'dateSent>': retrieveMessagesSince(),
+	},function(err,data) {
+		siftMessages(data);
+	});
+}
+		
+var siftMessages = function(data) {
+	var duplicateRegistraion = [];
+	data.messages.forEach(function(message) {
+		var messageBodyArray = message.body.split(' ');
+		
+		//check input
+		if (messageBodyArray[0]) {
+			messageBodyArray[0] = messageBodyArray[0].toLowerCase();
+		}
+		
+		//register
+		if (messageBodyArray[0] === "register" && messageBodyArray[1] && messageBodyArray[2]) {
+			if (duplicateRegistraion.indexOf(message.from) < 0) { //prevents dup attendees created if data.messages contains more than one register message
+				duplicateRegistraion.push(message.from);
+			
+				Attendee.count({'phoneNumber': message.from}, function(err, count) {
+					if (err) {console.log(err);}
+					if (count === 0) {
+						var newAttendee = new Attendee({
+							fullName: messageBodyArray[1] + " " + messageBodyArray[2],
+							dateJoined: new Date(message.date_sent),
+							phoneNumber: message.from
+						});
+						newAttendee.save(function(err) {
+							if(err) {console.log(err);}
+							else {
+								console.log('new attendee created!');
+								
+								Twilio.sms.messages.create({
+									body: "Welcome " +  newAttendee.fullName + "! You are registered.",
+									to: message.from,
+									from: twilioPhoneNumber
+								});
+							}
+						});
+					}
+				});
+			} else {
+				console.log("duplicated register message");
+			}
+			
+		} else if (messageBodyArray[0] === wordOfTheDay) {
+			Message.count({'sid': message.sid}, function(err, count) {
+				if(err){console.log(err);}
+				if (count === 0) {
+					Attendee.findOne({'phoneNumber': message.from}, function(err, attendee) {
+						if(err){console.log(err);}
+						var newMessage = new Message({
+							_userID: attendee._id,
+							phoneNumber: message.from,
+							body: message.body,
+							date: new Date(message.date_sent),
+							sid: message.sid
+						});
+						newMessage.save(function(err){
+							if(err){console.log(err)};
+							console.log("message saved");
+						});
+						attendee.messages.push(newMessage);
+						attendee.save(function(){
+							if (err) {res.send(err);}
+						});
+					});
+				}
+			});
+		}
+    });
+};
+
+router.route('/data/:month/:year')
+	//get all Attendees and messages only for month of :month :year and greater. (TODO: retrieve only this month)
+	.get(function(req, res) {
+		var month = req.params.month;
+		var year = req.params.year;
+		
+		if (parseInt(month, 10) && parseInt(year, 10)) {
+			var thisMonth = new Date(month + "-1-" + year);
+			var nextMonth = new Date((month + 1) + "-1-" + year);
+			
+			Attendee.find()
+			.populate(
+				{
+					path: 'messages',
+					match: {date: {$gte: thisMonth}}
+				}
+			)
+			
+			.exec(function(err, attendees) {
+				if (err) {res.send(err);}
+				res.json({"attendees":attendees});
+			});
+		} else {
+			res.json({"message":"params not numbers"});
+		}
+	});	
 
 
 router.route('/attendee')
@@ -62,72 +201,86 @@ router.route('/attendee')
 			}
 		});
 	});
-router.route('/attendee/:attendee_id')
-	/*
-	get an attendee by id
-	input: attendee_id via GET parameter
-	output: {{fullName: <name>, datesAttended:{date: <date>, date: <date>}}
-	*/
+	
+router.route('/message')
+	//get all messages
 	.get(function(req, res) {
-		Attendee.findById(req.params.attendee_id, function(err, attendee) {
-			if (err) {
-				res.send(err);
-			} else {
-				res.json(attendee);
-			}
-		});
-	}); 
-router.route('/here/:attendee_id')
-	/*
-	update attendee by id
-	input: {id: <id>, attendence: {date: <date>}}
-	output: none
-	*/
-	.post(function(req, res) {
-		Attendee.findById(req.params.attendee_id, function(err, attendee) {
-			if(err) {
-				res.send(err);
-			} else {
-				console.log("log");
-				attendee.datesAttended.push(req.body.date);
-				attendee.save(function(err) {
-					if (err) {
-						res.send(err);
-					} else {
-						res.json({message: "Attendee updated"});
-					}
-				});	
+		Message.find(function(err, message) {
+			if (err) {res.send(err);}
+			else {
+				res.json(message);
 			}
 		});
 	});
-router.route('/attendee/delete/:attendee_id')
-	/*
-	delete attendee
-	input: attendee_id via GET
-	output: none
-	*/
-	.get(function(req, res) {
-		Attendee.remove({
-			_id: req.params.attendee_id
-		}, function(err, attendee) {
-			if(err) {
-				res.send(err);
-			} else {
-				res.json({message: 'deleted'})
-			}
-		});
-	});
+	
+		
+	
+//extra routes//
 
-router.route('/text')
-	/*
-	text recieved
-	*/
-	.get(function(req, res) {
-		console.log("text recieved!");
-	});
+// router.get('/', function(req, res) {
+//     res.json({ message: 'hooray! welcome to our api!' });   
+// });
+
+
+// router.route('/attendee/:attendee_id')
+//     /*
+//     get an attendee by id
+//     input: attendee_id via GET parameter
+//     output: {{fullName: <name>, datesAttended:{date: <date>, date: <date>}}
+//     */
+//     .get(function(req, res) {
+//         Attendee.findById(req.params.attendee_id, function(err, attendee) {
+//             if (err) {
+//                 res.send(err);
+//             } else {
+//                 res.json(attendee);
+//             }
+//         });
+//     }); 
+// router.route('/here/:attendee_id')
+//     /*
+//     update attendee by id
+//     input: {id: <id>, attendence: {date: <date>}}
+//     output: none
+//     */
+//     .post(function(req, res) {
+//         Attendee.findById(req.params.attendee_id, function(err, attendee) {
+//             if(err) {
+//                 res.send(err);
+//             } else {
+//                 console.log("log");
+//                 attendee.datesAttended.push(req.body.date);
+//                 attendee.save(function(err) {
+//                     if (err) {
+//                         res.send(err);
+//                     } else {
+//                         res.json({message: "Attendee updated"});
+//                     }
+//                 }); 
+//             }
+//         });
+//     });
+// router.route('/attendee/delete/:attendee_id')
+//     /*
+//     delete attendee
+//     input: attendee_id via GET
+//     output: none
+//     */
+//     .get(function(req, res) {
+//         Attendee.remove({
+//             _id: req.params.attendee_id
+//         }, function(err, attendee) {
+//             if(err) {
+//                 res.send(err);
+//             } else {
+//                 res.json({message: 'deleted'})
+//             }
+//         });
+//     });
 
 app.use('/api', router);
 
 
 app.listen(port);
 console.log('Magic happens on port ' + port);
+

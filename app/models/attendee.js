@@ -5,7 +5,16 @@ var AttendeeSchema = new mongoose.Schema({
 		type: String,
 		require: true
 	},
-	datesAttended: [String]
+	dateJoined: {
+		type: Date
+	},
+	phoneNumber: {
+		type: String,
+		required: true
+	},
+	messages: [{
+		type: mongoose.Schema.Types.ObjectId, ref: "Message"
+	}]
 });
 
 module.exports = mongoose.model('Attendee', AttendeeSchema);
