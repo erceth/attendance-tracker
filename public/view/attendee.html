@@ -1,0 +1,36 @@
+<div>{{attendee.id}}</div>
+<div>{{attendee.fullName}}</div>
+<div>{{attendee.phoneNumber}}</div>
+<div>{{attendee.dateJoined}}</div>
+
+<br><br>
+
+<div class="row">
+    <div class="col-xs-6">
+        <div ng-repeat="m in attendee.messages">
+            <div>
+                <span>{{m.date}}: </span>
+                <span>{{m.body}} </span>
+                <span ng-click="deleteMessage(m)">delete</span>
+            </div>
+            
+        </div>
+        
+    </div>
+    <div class="col-xs-6">
+        <h4>Add new message</h4><br>
+            
+        <div>
+            <span>Selected date:</span>
+            <span>{{new.date.toDateString()}}</span>
+        </div>
+        <datepicker ng-model="new.date" show-weeks="true"></datepicker><br><br>
+        
+        <label for=message>Message (Optional)</label>
+        <input id="message" type="text" ng-model="new.message"><br><br>
+        
+        <button ng-click="addMessage()">Add message</button><br><br>
+    </div>
+    
+        
+</div>

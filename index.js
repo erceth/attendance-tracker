@@ -16,8 +16,8 @@ var fetchFromTwilio = true;
 
 var retrieveMessagesSince = function() {
 	var date = new Date();
-	//return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate(); //optimiziation
-	return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + "1";
+	return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate(); //optimiziation
+	//return date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + "1";
 };
 
 app.use(bodyParser.urlencoded({
@@ -28,6 +28,8 @@ app.use(bodyParser.json());
 var port = process.env.PORT || 80; 
 
 var router = express.Router();
+
+app.use(express.static(__dirname + '/public'));
 
 // middleware to use for all requests
 router.use(function(req, res, next) {
@@ -228,21 +230,75 @@ router.route('/message')
 // });
 
 
-// router.route('/attendee/:attendee_id')
-//     /*
-//     get an attendee by id
-//     input: attendee_id via GET parameter
-//     output: {{fullName: <name>, datesAttended:{date: <date>, date: <date>}}
-//     */
-//     .get(function(req, res) {
-//         Attendee.findById(req.params.attendee_id, function(err, attendee) {
-//             if (err) {
-//                 res.send(err);
-//             } else {
-//                 res.json(attendee);
-//             }
-//         });
-//     }); 
+router.route('/attendee/:attendee_id')
+     /*
+     get an attendee by id
+     input: attendee_id via GET parameter
+     output: {{fullName: <name>, datesAttended:{date: <date>, date: <date>}}
+     */
+     .get(function(req, res) {
+	
+	 Attendee.findById(req.params.attendee_id)
+	 .populate({
+		path: 'messages'	
+	 }).exec(function(err, attendees) {
+		if (err) { res.send(err);}
+		res.json({"attendees" : attendees});
+	 });
+     });
+     
+router.route('/attendee/newmessage')
+	.post(function(req, res) {
+        //find attendee
+        Attendee.findOne({'_id':  req.body.id}, function(err, attendee) {
+            //create message
+            var newMessage = new Message({
+                _userID: attendee._id,
+                phoneNumber: attendee.phoneNumber,
+                body: req.body.message,
+                date: new Date(req.body.date),
+                sid: "1234"
+            });
+            //save message
+            newMessage.save(function(err){
+                if(err){console.log(err)};
+                console.log("message saved");
+            });
+            //save attendee
+            attendee.messages.push(newMessage);
+            attendee.save(function(){
+                if (err) {res.send(err);}
+                res.json({message: "success!"});
+            });
+
+        });
+
+
+	});
+
+router.route('/attendee/deletemessage')
+    .post(function(req, res) {
+
+        Message.remove({'_id': req.body.id}, function(err, message) {
+            if(err) {res.send(err);
+            } else {
+                Attendee.findOne({'_id':  req.body.userID}, function(err, attendee) {
+                    for (var i = 0; i < attendee.messages.length; i++) {
+                        if (attendee.messages[i]+'' === req.body.id) { //possible memory leaks
+                            attendee.messages.splice(i,1); //delete the message id
+                            console.log("deleted message id: ", req.body.id);
+                            console.log("attendees messages: ", attendee.messages);
+                            break;
+                        }
+                    }
+                    res.json({message: "success!"});
+                });
+            }
+        });
+
+    });
+
+
 // router.route('/here/:attendee_id')
 //     /*
 //     update attendee by id
