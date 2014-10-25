@@ -7,7 +7,7 @@ Tracks classroom attendance using SMS messaging and displays it using google spr
 This is not a very thorough readme file.  If you want to set this up there will be plenty of problems you will need to figure out on your own.
 Pull requests are welcome.
 
-## Technologies used:
+## Technologies used
 Javascript, Node, Google Apps Script, AngularJS, Mongoose (MongoDB), Express router, Twilio
 
 ## File structure breakdown
