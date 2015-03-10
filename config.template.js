@@ -2,7 +2,7 @@
 var config = {};
 
 config.twilioAccountSid = 'yourTwilioAccountSid';
-config.twilioauthToken = 'yourTwilioAuthToken';
+config.twilioAuthToken = 'yourTwilioAuthToken';
 config.wordOfDayPassword = 'yourWordOfDayPassword';
 config.twillioPhoneNumber = "yourTwillioPhoneNumber";
 
